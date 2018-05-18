@@ -1,0 +1,111 @@
+---
+title: "Predicting Correct to Incorrect Manner of an Exercise Done by Participants"
+author: "Dashess"
+date: "5/17/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#### Background Information
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. These six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+Data
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
+
+### Project Goal
+The goal of this project is to predict the manner in which they did the exercise. This is the “classe” variable in the training set. Describing how the model is built, how to cross validates it, evaluate the expected out of sample error, and explain the rationales of any choice made. The prediction model will be used to predict 20 different test cases.
+
+### Data downloading, Preprocessing, Reading
+#### Downloading the Data
+Checking if the files exist in de working directory and if not download them.
+```{r}
+if (!file.exists("data")) {
+        dir.create("data")
+}
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+if (!file.exists(".//data//pml-training.csv")) {
+download.file(fileUrl, destfile = ".//data//pml-training.csv", method = "curl")
+}
+fileUrl2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+if (!file.exists(".//data//pml-testing.csv")) {
+download.file(fileUrl2, destfile = ".//data//pml-testing.csv", method = "curl")
+}
+```
+#### Loading the data
+```{r}
+rawData <- read.csv(".//data//pml-training.csv")
+predictionTesting <- read.csv(".//data//pml-testing.csv")
+```
+
+Correctly assign NA values to missing values in the rawData set.
+```{r}
+rawData[rawData == "#DIV/0!"] <- NA
+rawData[rawData == ""] <- NA
+```
+```{r}
+dim(rawData)
+dim(predictionTesting)
+```
+
+The training data set (rawData) contains 19622 observations and 160 variables. The predictionTesting data set (predictionTesting) contains 20 observations and 160 variables. 
+
+#### Data cleaning
+Removing the columns that consist of mostly NA values. Removing the columns "X", "Name" and the "timestamp" variables (columns 1-5) in both training and testing data sets, because they have no useful data for the model.
+```{r}
+rawData <- rawData[, colSums(is.na(rawData)) == 0] 
+predictionTesting <- predictionTesting[, colSums(is.na(predictionTesting)) == 0] 
+rawData <- rawData[,-c(1:5)]
+predictionTesting <- predictionTesting[,-c(1:5)]
+```
+
+#### Crossvalidation, Training and Testing Data Sets
+The aim of this study is to build a Machine Learning Algorithm to predict the "classe" variable in the data sets. A training and testing data set is created from the innitial rawData data set for crossvalidation and accuracy purposes. The ratio for the training and testing data set is 3/4 and are standard numbers for these practices. This is done to train the algorithm on the training set and test it on the testing set for validation to make predictions on new data. With this model we try to predict the "Classe" variable from the 20 observations in the predictionTesting data set for the Course Quiz.
+
+```{r training, message = FALSE}
+library(caret)
+set.seed(1337)
+inTrain <- createDataPartition(rawData$classe, p=3/4, list=FALSE)
+training <- rawData[inTrain, ]
+testing <- rawData[-inTrain, ]
+```
+
+### Machine Learning Model Selection
+According to Jeff Leek Random Forest are used the most to predict categorical outcomes, it is one of the most accurate methods for prediction and is rubust in selecting correlated covariates and outliers. With the Netflix Grand Prize and the Heritage Health Prize contests Random Forest were the main Machine Learning Algorithm for the winning solutions. Therefore a Random Forest Model was chosen for this study.
+
+#### Fitting the Model
+For fitting the Random Forest model no preprocessing was used, this model gave the highest accuracy in testing. Number of trees (ntree) used is 250, this is the total number of nodes that are allowed in the model. Number of trees is done mostly for performance reasons.
+```{r model, cache = TRUE}
+modelRF <- train(classe ~ ., data = training, method = "rf", 
+                 trControl = trainControl(method="none"), ntree = 250)
+modelRF
+```
+
+#### Performance and Accuracy Check of the Model for the Training Data Set
+The next step is to estimate the performance of the model on the testing data set called (testing). The confusionMatrix and both the estimated accuracy and the the estimated out-of-sample error of the model are calculated. The confusion matrix shows 3 wrongly classified predictions, this is very low this is shown in the accuracy test.
+```{r}
+predRF <- predict(modelRF, testing)
+confusionMatrix(testing$classe, predRF)
+postResample(predRF, testing$classe)
+```
+
+The model reached an accuracy of 0.999 (99.9%), that means that we predict there will be almost no out of sample errors with this Random Forest Model.
+
+#### Out of Sample Error
+There is a 0.06% of out of sample error, which means that using this model to predict values from new data has a 0.06% chance for a wrong prediction.
+```{r}
+1 - as.numeric(confusionMatrix(testing$classe, predRF)$overall[1])
+```
+
+### Prediction for the Quiz Test Set (predictionTesting).
+Predicting the "Classe" variable for the predictionTesting data set using the Random Forest model (modelRF) that we fitted with the training data set.
+```{r}
+predict(modelRF, predictionTesting)
+```
